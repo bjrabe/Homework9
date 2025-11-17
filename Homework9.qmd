@@ -22,6 +22,7 @@ library(baguette)
 library(glmnet)
 library(ranger)
 library(rpart.plot)
+library(vip)
 ```
 
 
@@ -342,7 +343,6 @@ rentals_condensed_test <- testing(rentals_condensed_split)
 Now on the training set, we create a 10-fold CV split. 
 
 ```{r}
-set.seed(200)
 rentals_10_fold <- vfold_cv(rentals_condensed_train, 10)
 ```
 
@@ -562,8 +562,6 @@ tree_fit_final |>
 We repeat the same sequence of steps as we did for the LASSO and regression tree models to create a bagged tree model. Since the sequence of steps for doing so is exactly the same as previous models, we will not repeat the narrative description again. Comments are included for clarity. 
 
 ```{r}
-set.seed(366)
-
 # set up model with engine. we tune only on cost complexity here ----
 bagg_mod <- bag_tree(tree_depth = 5, min_n = 10, cost_complexity = tune()) |>
   set_engine('rpart') |>
@@ -602,11 +600,9 @@ bagg_fit_final |>
 We repeat the same sequence of steps as we did for the LASSO, regression tree, and bagged tree models to create a random forest model. Since the sequence of steps for doing so is exactly the same as previous models, we will not repeat the narrative description again. Comments are included for clarity. 
 
 ```{r}
-set.seed(4000)
-
 # create a model. tune on number of features to consider at each split ----
 rf_mod <- rand_forest(mtry = tune()) |>
-  set_engine('ranger') |>
+  set_engine('ranger', importance = 'impurity') |>
   set_mode('regression')
 
 # create a workflow
@@ -677,10 +673,17 @@ For the bagged tree and random forest models, we produce variable importance plo
 bagg_plot_object <- extract_fit_engine(bagg_fit_final)
 bagg_plot_object$imp |> 
   mutate(term = factor(term, levels = term)) |>  
-  ggplot(aes(x = term, y = value)) + geom_bar(stat ="identity") +  coord_flip()
+  ggplot(aes(x = term, y = value)) + geom_bar(stat ="identity") +  coord_flip() + labs(x = 'Variable', y = 'Importance', title = 'Variable Importance Plot for Bagged Tree Model')
+
+extract_fit_parsnip(rf_fit_final$.workflow[[1]]) |>
+  vip::vi() |>
+  mutate(Variable = as.factor(Variable)) |>
+  ggplot(aes(x = reorder(Variable, -Importance), y = Importance)) + geom_bar(stat = 'identity') + coord_flip() + labs(x = 'Variable', title = 'Variable Importance Plot for Random Forest Model')
 ```
 
-We see that for the bagged tree model, average daily temp is the most important variable, followed by average dew point temp, and average solar radiation. 
+We see that for the bagged tree model, average daily temp is the most important variable, followed by average daily dew point temp and average daily solar radiation. 
+
+For the random forest model, average daily temp is also the most important variable, followed by average daily solar radiation. All other variables carry much less importance. 
 
 
 # Final Fit of Overall Best Model
