@@ -333,6 +333,7 @@ These correlations make sense. As discussed before based on our plot, daily bike
 Now that we have wrangled the data and done some EDA, it is time to begin modeling. In this section we split the data into training and test sets using a 75/25 split, stratifying on the seasons variable.
 
 ```{r}
+set.seed(438)
 rentals_condensed_split <- initial_split(rentals_condensed, prop = 0.75, strata = seasons)
 rentals_condensed_train <- training(rentals_condensed_split)
 rentals_condensed_test <- testing(rentals_condensed_split)
@@ -341,6 +342,7 @@ rentals_condensed_test <- testing(rentals_condensed_split)
 Now on the training set, we create a 10-fold CV split. 
 
 ```{r}
+set.seed(200)
 rentals_10_fold <- vfold_cv(rentals_condensed_train, 10)
 ```
 
@@ -504,7 +506,7 @@ LASSO_parameter_best <- LASSO_grid |>
   select_best(metric = 'rmse')
 ```
 
-Now that we have determined the best model by finding the tuning parameter which yields the lowest training set cross-validation RMSE, we fit this model to the entire training set and find its metrics on the test set. Later in this assignement, we will assemble the test set metrics from all our different models into one table. 
+Now that we have determined the best model by finding the tuning parameter which yields the lowest training set cross-validation RMSE, we fit this model to the entire training set and find its metrics on the test set. Later in this assignment, we will assemble the test set metrics from all our different models into one table. 
 
 ```{r}
 LASSO_fit_final <- LASSO_wkfl |>
@@ -560,6 +562,8 @@ tree_fit_final |>
 We repeat the same sequence of steps as we did for the LASSO and regression tree models to create a bagged tree model. Since the sequence of steps for doing so is exactly the same as previous models, we will not repeat the narrative description again. Comments are included for clarity. 
 
 ```{r}
+set.seed(366)
+
 # set up model with engine. we tune only on cost complexity here ----
 bagg_mod <- bag_tree(tree_depth = 5, min_n = 10, cost_complexity = tune()) |>
   set_engine('rpart') |>
@@ -598,6 +602,8 @@ bagg_fit_final |>
 We repeat the same sequence of steps as we did for the LASSO, regression tree, and bagged tree models to create a random forest model. Since the sequence of steps for doing so is exactly the same as previous models, we will not repeat the narrative description again. Comments are included for clarity. 
 
 ```{r}
+set.seed(4000)
+
 # create a model. tune on number of features to consider at each split ----
 rf_mod <- rand_forest(mtry = tune()) |>
   set_engine('ranger') |>
@@ -639,11 +645,11 @@ rbind(rentals_fit_final |> collect_metrics(),
   arrange(.metric, .estimate)
 ```
 
-We see that the MLR model has the lowest MAE and RMSE, indicating that this model performs best on the test set!!!
+We see that the random forest model has the lowest MAE and RMSE, indicating that this model performs best on the test set!!!
 
 ## Final Fits and Summaries
 
-In this section we extract the final model fits for each type and report a summary of each model. 
+In this section we extract the final model fits on the training data for each type and report a summary of each model. 
 
 For MLR and LASSO, we report final coefficient tables.
 
@@ -668,18 +674,24 @@ tree_fit_final |>
 For the bagged tree and random forest models, we produce variable importance plots.
 
 ```{r}
-
+bagg_plot_object <- extract_fit_engine(bagg_fit_final)
+bagg_plot_object$imp |> 
+  mutate(term = factor(term, levels = term)) |>  
+  ggplot(aes(x = term, y = value)) + geom_bar(stat ="identity") +  coord_flip()
 ```
+
+We see that for the bagged tree model, average daily temp is the most important variable, followed by average dew point temp, and average solar radiation. 
+
 
 # Final Fit of Overall Best Model
 
-In this section, we conclude by fitting the overall best model to the entire data set. Since we showed that the MLR model was the best, we fit this to the entire data set and print out its coefficient table. 
+In this section, we conclude by fitting the overall best model to the entire data set. Since we showed that the random forest model was the best, we fit this model to the entire data set.
 
 ```{r}
-final_model <- rentals_CV_wkfl3 |>
+final_model <- rf_wkfl |>
+  finalize_workflow(rf_parameter_best) |>
   fit(rentals_condensed)
 
-final_model |>
-  tidy()
+final_model
 ```
 
